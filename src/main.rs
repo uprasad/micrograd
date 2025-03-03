@@ -5,7 +5,8 @@ struct Value<'a> {
     data: f64,
     deps: Vec<&'a Value<'a>>,
     label: &'a str,
-    op: char,
+    op: &'a str,
+    grad: f64,
 }
 
 impl<'a> fmt::Display for Value<'a> {
@@ -22,7 +23,8 @@ impl<'a> ops::Add<&'a Value<'a>> for &'a Value<'a> {
             data: self.data + other.data,
             deps: vec![self, other],
             label: "",
-            op: '+',
+            op: "+",
+            grad: 0.0,
         }
     }
 }
@@ -35,22 +37,26 @@ impl<'a> ops::Mul<&'a Value<'a>> for &'a Value<'a> {
             data: self.data * other.data,
             deps: vec![self, other],
             label: "",
-            op: '*',
+            op: "*",
+            grad: 0.0,
         }
     }
 }
 
 impl<'a> Value<'a> {
     fn fmt_helper(&self, f: &mut fmt::Formatter<'_>, indent: usize) -> fmt::Result {
-        let data = if self.op == '\0' {
-            format!("({}={})", self.label, self.data)
+        let data = if self.op == "" {
+            format!("({}={}, grad={:.3})", self.label, self.data, self.grad)
         } else {
-            format!("({}={}, '{}')", self.label, self.data, self.op)
+            format!(
+                "({}={}, '{}', grad={:.3})",
+                self.label, self.data, self.op, self.grad
+            )
         };
         if indent == 0 {
             writeln!(f, "{}", data)?;
         } else {
-            writeln!(f, "{}|--{}", str::repeat(" ", 2 * (indent - 2)), data,)?;
+            writeln!(f, "{}|----{}", str::repeat(" ", 3 * (indent - 2)), data,)?;
         }
 
         for dep in &self.deps {
@@ -59,8 +65,16 @@ impl<'a> Value<'a> {
         Ok(())
     }
 
-    fn set_label(&mut self, label: &'a str) {
-        self.label = label;
+    fn tanh(&'a self) -> Value<'a> {
+        let exp = (2.0 * self.data).exp();
+        let tanh = (exp - 1.0) / (exp + 1.0);
+        Value {
+            data: tanh,
+            deps: vec![self],
+            label: "",
+            op: "tanh",
+            grad: 0.0,
+        }
     }
 
     fn new(data: f64, label: &'a str) -> Value<'a> {
@@ -68,7 +82,8 @@ impl<'a> Value<'a> {
             data: data,
             deps: Vec::new(),
             label: label,
-            op: '\0',
+            op: "",
+            grad: 0.0,
         }
     }
 }
@@ -79,15 +94,16 @@ fn main() {
     let c = Value::new(10.0, "c");
 
     let mut e = &a * &b;
-    e.set_label("e");
+    e.label = "e";
 
     let mut d = &e + &c;
-    d.set_label("d");
+    d.label = "d";
 
     let f = Value::new(-2.0, "f");
 
     let mut l = &d * &f;
-    l.set_label("L");
+    l.label = "L";
+    l.grad = 1.0;
 
     println!("{}", l);
 }
