@@ -4,6 +4,7 @@ use std::ops;
 struct Value<'a> {
     data: f64,
     deps: Vec<&'a Value<'a>>,
+    op: char,
 }
 
 impl<'a> fmt::Display for Value<'a> {
@@ -19,6 +20,7 @@ impl<'a> ops::Add<&'a Value<'a>> for &'a Value<'a> {
         Value {
             data: self.data + other.data,
             deps: vec![self, other],
+            op: '+',
         }
     }
 }
@@ -30,21 +32,22 @@ impl<'a> ops::Mul<&'a Value<'a>> for &'a Value<'a> {
         Value {
             data: self.data * other.data,
             deps: vec![self, other],
+            op: '*',
         }
     }
 }
 
 impl<'a> Value<'a> {
     fn fmt_helper(&self, f: &mut fmt::Formatter<'_>, indent: usize) -> fmt::Result {
-        if indent == 0 {
-            writeln!(f, "({})", self.data)?;
+        let data = if self.op == '\0' {
+            format!("({})", self.data)
         } else {
-            writeln!(
-                f,
-                "{}|--({})",
-                str::repeat(" ", 2 * (indent - 2)),
-                self.data
-            )?;
+            format!("({}, '{}')", self.data, self.op)
+        };
+        if indent == 0 {
+            writeln!(f, "{}", data)?;
+        } else {
+            writeln!(f, "{}|--{}", str::repeat(" ", 2 * (indent - 2)), data,)?;
         }
 
         for dep in &self.deps {
@@ -57,6 +60,7 @@ impl<'a> Value<'a> {
         Value {
             data: data,
             deps: Vec::new(),
+            op: '\0',
         }
     }
 }
